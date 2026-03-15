@@ -1,0 +1,12 @@
+name: lambda-deploy
+version: "1.0.0"
+trigger: manual
+
+jobs:
+  - job_type: LAMBDA_DEPLOY
+    version: "1.0.0"
+    parameter_sources:
+      function_name: "input:FUNCTION_NAME"
+      alias_name: "input:ALIAS_NAME"
+      test_payload: "input:TEST_PAYLOAD"
+      expected_status_code: "input:EXPECTED_STATUS_CODE"

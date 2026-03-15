@@ -1,0 +1,76 @@
+// Lambda Deploy Pipeline: launch → poll watcher until DONE or FAILED
+
+def operationId = ''
+
+pipeline {
+    agent none
+
+    parameters {
+        string(name: 'FUNCTION_NAME', description: 'Lambda function to deploy')
+        string(name: 'ALIAS_NAME', defaultValue: 'live', description: 'Alias to update')
+        string(name: 'TEST_PAYLOAD', defaultValue: '{}', description: 'JSON payload for smoke test')
+        string(name: 'EXPECTED_STATUS_CODE', defaultValue: '200', description: 'Expected invoke status')
+        booleanParam(name: 'DRY_RUN', defaultValue: false, description: 'Dry run mode')
+    }
+
+    stages {
+        stage('Launch') {
+            steps {
+                script {
+                    def result = build job: 'lambda-deploy/launcher',
+                        parameters: [
+                            string(name: 'FUNCTION_NAME', value: params.FUNCTION_NAME),
+                            string(name: 'ALIAS_NAME', value: params.ALIAS_NAME),
+                            string(name: 'TEST_PAYLOAD', value: params.TEST_PAYLOAD),
+                            string(name: 'EXPECTED_STATUS_CODE', value: params.EXPECTED_STATUS_CODE),
+                            booleanParam(name: 'DRY_RUN', value: params.DRY_RUN),
+                        ],
+                        wait: true
+                    operationId = result.getBuildVariables().get('OPERATION_ID', '')
+                    echo "Launched operation: ${operationId}"
+                }
+            }
+        }
+
+        stage('Advance: INITIATED → PUBLISHING') {
+            steps {
+                build job: 'lambda-deploy/watcher',
+                      parameters: [string(name: 'OPERATION_ID', value: operationId)],
+                      wait: true
+            }
+        }
+
+        stage('Advance: PUBLISHING → UPDATING_ALIAS') {
+            steps {
+                build job: 'lambda-deploy/watcher',
+                      parameters: [string(name: 'OPERATION_ID', value: operationId)],
+                      wait: true
+            }
+        }
+
+        stage('Advance: UPDATING_ALIAS → SMOKE_TESTING') {
+            steps {
+                build job: 'lambda-deploy/watcher',
+                      parameters: [string(name: 'OPERATION_ID', value: operationId)],
+                      wait: true
+            }
+        }
+
+        stage('Advance: SMOKE_TESTING → DONE') {
+            steps {
+                build job: 'lambda-deploy/watcher',
+                      parameters: [string(name: 'OPERATION_ID', value: operationId)],
+                      wait: true
+            }
+        }
+    }
+
+    post {
+        failure {
+            echo "Lambda deploy failed for operation ${operationId}. Check DynamoDB for details."
+        }
+        success {
+            echo "Lambda deploy completed for operation ${operationId}."
+        }
+    }
+}
