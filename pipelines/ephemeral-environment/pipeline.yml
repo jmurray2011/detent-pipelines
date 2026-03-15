@@ -1,0 +1,5 @@
+name: ephemeral-environment
+version: "0.1.0"
+trigger: manual
+
+jobs: []  # TODO: define when ephemeral environment jobs are built

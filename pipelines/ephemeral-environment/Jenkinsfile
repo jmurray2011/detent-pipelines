@@ -1,0 +1,14 @@
+// Ephemeral Environment Pipeline: PROVISION → notify → teardown on TTL or cancel
+// TODO: implement when ephemeral environment jobs are built
+
+pipeline {
+    agent none
+
+    stages {
+        stage('Placeholder') {
+            steps {
+                echo 'Not yet implemented.'
+            }
+        }
+    }
+}

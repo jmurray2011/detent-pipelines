@@ -1,0 +1,45 @@
+// AMI Lifecycle Pipeline: BUILD → approve → ROLLOUT → CLEANUP
+
+pipeline {
+    agent none
+
+    stages {
+        stage('AMI Build') {
+            steps {
+                build job: 'ami-build/launcher',
+                      parameters: readPipelineParams('AMI_BUILD'),
+                      wait: true
+            }
+        }
+
+        stage('Approve Rollout') {
+            steps {
+                input message: 'AMI build succeeded. Approve rollout?',
+                      submitter: 'platform-team'
+            }
+        }
+
+        stage('AMI Rollout') {
+            steps {
+                build job: 'ami-rollout/launcher',
+                      parameters: readPipelineParams('AMI_ROLLOUT'),
+                      wait: true
+            }
+        }
+
+        stage('AMI Cleanup') {
+            steps {
+                build job: 'ami-cleanup/launcher',
+                      parameters: readPipelineParams('AMI_CLEANUP'),
+                      wait: true
+            }
+        }
+    }
+
+    post {
+        failure {
+            // Read operation record from DynamoDB and surface status
+            echo "Pipeline failed — check operation records for details."
+        }
+    }
+}

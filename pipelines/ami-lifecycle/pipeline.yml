@@ -1,0 +1,26 @@
+name: ami-lifecycle
+version: "0.1.0"
+trigger: schedule
+schedule: "H 2 * * 1-5"
+
+jobs:
+  - job_type: AMI_BUILD
+    version: "0.1.0"
+    parameter_sources:
+      recipe_arn: "ssm:/detent/ami-build/recipe-arn"
+      base_ami_id: "ssm:/detent/ami-build/base-ami-id"
+      target_regions: "ssm:/detent/ami-build/target-regions"
+
+  - job_type: AMI_ROLLOUT
+    version: "0.1.0"
+    parameter_sources:
+      ami_id: "operation:built_ami_id"
+      target_launch_templates: "ssm:/detent/ami-rollout/target-launch-templates"
+      target_asgs: "ssm:/detent/ami-rollout/target-asgs"
+
+  - job_type: AMI_CLEANUP
+    version: "0.1.0"
+    parameter_sources:
+      retention_days: "ssm:/detent/ami-cleanup/retention-days"
+      target_regions: "ssm:/detent/ami-build/target-regions"
+      ami_name_prefix: "ssm:/detent/ami-cleanup/ami-name-prefix"
