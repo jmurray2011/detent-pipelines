@@ -1,0 +1,79 @@
+// Manual intervention job — CANCEL, RETRY, or ADVANCE an operation.
+// Provides a controlled interface without direct DynamoDB access.
+
+pipeline {
+    agent {
+        ecs {
+            inheritFrom 'detent-agent'
+        }
+    }
+    parameters {
+        string(name: 'OPERATION_ID', description: 'Operation ID to act on')
+        choice(
+            name: 'COMMAND',
+            choices: ['CANCEL', 'RETRY', 'ADVANCE'],
+            description: 'Intervention command',
+        )
+        string(
+            name: 'TARGET_STATE',
+            defaultValue: '',
+            description: 'Target state (only used with ADVANCE)',
+        )
+    }
+    stages {
+        stage('Validate') {
+            steps {
+                script {
+                    if (params.COMMAND == 'ADVANCE' && !params.TARGET_STATE) {
+                        error('TARGET_STATE is required for ADVANCE command')
+                    }
+                }
+            }
+        }
+
+        stage('Execute') {
+            steps {
+                sh """
+                python3 -c "
+from detent.intervention import cancel, retry, force_advance
+import os
+
+op_id = '${params.OPERATION_ID}'
+command = '${params.COMMAND}'
+actor = os.environ.get('BUILD_USER_ID', 'jenkins')
+
+if command == 'CANCEL':
+    cancel(op_id, actor=actor)
+    print(f'Operation {op_id} cancelled by {actor}')
+elif command == 'RETRY':
+    retry(op_id, actor=actor)
+    print(f'Operation {op_id} retried by {actor}')
+elif command == 'ADVANCE':
+    target = '${params.TARGET_STATE}'
+    force_advance(op_id, target, actor=actor)
+    print(f'Operation {op_id} advanced to {target} by {actor}')
+"
+                """
+            }
+        }
+
+        stage('Status') {
+            steps {
+                sh """
+                python3 -c "
+from detent.db.operations import get_operation
+import json
+
+op = get_operation('${params.OPERATION_ID}')
+if op:
+    print(f'Status: {op[\"status\"]}')
+    print(f'Updated: {op[\"updatedAt\"]}')
+    print(f'Job Type: {op[\"jobType\"]}')
+else:
+    print('Operation not found')
+"
+                """
+            }
+        }
+    }
+}
