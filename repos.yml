@@ -1,0 +1,7 @@
+# Maps repo short names (used in pipeline.yml) to Git URLs.
+# This is the only environment-specific file in this repo.
+# Update these URLs to match your Git hosting.
+
+lambda-deploy: https://github.com/jmurray2011/lambda-deploy.git
+config-sync: https://github.com/jmurray2011/config-sync.git
+detent-pipelines: https://github.com/jmurray2011/detent-pipelines.git

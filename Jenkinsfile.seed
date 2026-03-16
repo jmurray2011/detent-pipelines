@@ -1,0 +1,97 @@
+// Seed job — reads pipeline.yml manifests and creates Jenkins jobs.
+// Run this once after fresh deploy, or whenever pipelines change.
+
+pipeline {
+    agent { label 'detent-agent' }
+    stages {
+        stage('Generate Jobs') {
+            steps {
+                checkout scm
+                script {
+                    def repos = readYaml file: 'repos.yml'
+
+                    def pipelines = findFiles(glob: 'pipelines/*/pipeline.yml')
+                    pipelines.each { f ->
+                        def manifest = readYaml file: f.path
+                        def name = manifest.name
+                        def repoName = manifest.repo
+                        def repoUrl = repos[repoName]
+                        def branch = manifest.branch ?: '*/master'
+
+                        if (!repoUrl) {
+                            echo "WARNING: No repo URL for '${repoName}' in repos.yml, skipping ${name}"
+                            return
+                        }
+
+                        manifest.jobs.each { job ->
+                            def jenkinsfiles = job.jenkinsfiles ?: [:]
+                            def launcher = jenkinsfiles.launcher ?: 'Jenkinsfile.launcher'
+                            def watcher = jenkinsfiles.watcher ?: 'Jenkinsfile.watcher'
+
+                            jobDsl scriptText: """
+                                folder('${name}') {
+                                    description('${name} automation')
+                                }
+                                pipelineJob('${name}/launcher') {
+                                    description('${name} launcher')
+                                    definition {
+                                        cpsScm {
+                                            scm {
+                                                git {
+                                                    remote {
+                                                        url('${repoUrl}')
+                                                    }
+                                                    branches('${branch}')
+                                                }
+                                            }
+                                            scriptPath('${launcher}')
+                                        }
+                                    }
+                                }
+                                pipelineJob('${name}/watcher') {
+                                    description('${name} watcher')
+                                    definition {
+                                        cpsScm {
+                                            scm {
+                                                git {
+                                                    remote {
+                                                        url('${repoUrl}')
+                                                    }
+                                                    branches('${branch}')
+                                                }
+                                            }
+                                            scriptPath('${watcher}')
+                                        }
+                                    }
+                                }
+                            """
+                        }
+                    }
+
+                    // Manual intervention job from this repo
+                    def pipelinesUrl = repos['detent-pipelines']
+                    if (pipelinesUrl) {
+                        jobDsl scriptText: """
+                            pipelineJob('manual-intervention') {
+                                description('Cancel, retry, or force-advance a stuck operation')
+                                definition {
+                                    cpsScm {
+                                        scm {
+                                            git {
+                                                remote {
+                                                    url('${pipelinesUrl}')
+                                                }
+                                                branches('*/master')
+                                            }
+                                        }
+                                        scriptPath('jobs/manual-intervention/Jenkinsfile')
+                                    }
+                                }
+                            }
+                        """
+                    }
+                }
+            }
+        }
+    }
+}
